@@ -503,6 +503,7 @@ impl Database {
                 language_server_id: ActiveValue::set(summary.language_server_id as i64),
                 error_count: ActiveValue::set(summary.error_count as i32),
                 warning_count: ActiveValue::set(summary.warning_count as i32),
+                information_count: ActiveValue::set(summary.information_count as i32),
             })
             .on_conflict(
                 OnConflict::columns([
@@ -829,6 +830,7 @@ impl Database {
                             language_server_id: db_summary.language_server_id as u64,
                             error_count: db_summary.error_count as u32,
                             warning_count: db_summary.warning_count as u32,
+                            information_count: db_summary.information_count as u32,
                         });
                 }
             }

@@ -11,12 +11,14 @@ pub struct ToolbarControls {
 impl Render for ToolbarControls {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let mut include_warnings = false;
+        let mut include_informations = false;
         let mut has_stale_excerpts = false;
         let mut is_updating = false;
 
         if let Some(editor) = self.diagnostics() {
             let diagnostics = editor.read(cx);
             include_warnings = diagnostics.include_warnings;
+            include_informations = diagnostics.include_informations;
             has_stale_excerpts = !diagnostics.paths_to_update.is_empty();
             is_updating = diagnostics.update_excerpts_task.is_some()
                 || diagnostics
@@ -27,14 +29,24 @@ impl Render for ToolbarControls {
                     .is_some();
         }
 
-        let tooltip = if include_warnings {
+        let warning_tooltip = if include_warnings {
             "Exclude Warnings"
         } else {
             "Include Warnings"
         };
-
         let warning_color = if include_warnings {
             Color::Warning
+        } else {
+            Color::Muted
+        };
+
+        let information_tooltip = if include_informations {
+            "Exclude Informations"
+        } else {
+            "Include Informations"
+        };
+        let information_color = if include_informations {
+            Color::Info
         } else {
             Color::Muted
         };
@@ -57,11 +69,11 @@ impl Render for ToolbarControls {
                         })),
                 )
             })
-            .child(
+            .children(vec![
                 IconButton::new("toggle-warnings", IconName::Warning)
                     .icon_color(warning_color)
                     .shape(IconButtonShape::Square)
-                    .tooltip(Tooltip::text(tooltip))
+                    .tooltip(Tooltip::text(warning_tooltip))
                     .on_click(cx.listener(|this, _, window, cx| {
                         if let Some(editor) = this.diagnostics() {
                             editor.update(cx, |editor, cx| {
@@ -69,7 +81,18 @@ impl Render for ToolbarControls {
                             });
                         }
                     })),
-            )
+                IconButton::new("toggle-informations", IconName::Info)
+                    .icon_color(information_color)
+                    .shape(IconButtonShape::Square)
+                    .tooltip(Tooltip::text(information_tooltip))
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        if let Some(editor) = this.diagnostics() {
+                            editor.update(cx, |editor, cx| {
+                                editor.toggle_informations(&Default::default(), window, cx);
+                            })
+                        }
+                    })),
+            ])
     }
 }
 

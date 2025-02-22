@@ -154,6 +154,7 @@ async fn test_diagnostics(cx: &mut TestAppContext) {
         ProjectDiagnosticsEditor::new_with_context(
             1,
             true,
+            true,
             project.clone(),
             workspace.downgrade(),
             window,
@@ -489,6 +490,7 @@ async fn test_diagnostics_multiple_servers(cx: &mut TestAppContext) {
         ProjectDiagnosticsEditor::new_with_context(
             1,
             true,
+            true,
             project.clone(),
             workspace.downgrade(),
             window,
@@ -767,6 +769,7 @@ async fn test_random_diagnostics(cx: &mut TestAppContext, mut rng: StdRng) {
         ProjectDiagnosticsEditor::new_with_context(
             1,
             true,
+            true,
             project.clone(),
             workspace.downgrade(),
             window,
@@ -873,6 +876,7 @@ async fn test_random_diagnostics(cx: &mut TestAppContext, mut rng: StdRng) {
     let reference_diagnostics = window.build_entity(cx, |window, cx| {
         ProjectDiagnosticsEditor::new_with_context(
             1,
+            true,
             true,
             project.clone(),
             workspace.downgrade(),

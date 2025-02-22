@@ -1235,6 +1235,7 @@ async fn test_omitted_diagnostics(cx: &mut gpui::TestAppContext) {
                 DiagnosticSummary {
                     error_count: 1,
                     warning_count: 0,
+                    information_count: 0,
                 }
             )]
         );
@@ -1516,6 +1517,7 @@ async fn test_restarting_server_with_diagnostics_published(cx: &mut gpui::TestAp
             DiagnosticSummary {
                 error_count: 1,
                 warning_count: 0,
+                information_count: 0,
             }
         );
     });
@@ -1542,6 +1544,7 @@ async fn test_restarting_server_with_diagnostics_published(cx: &mut gpui::TestAp
             DiagnosticSummary {
                 error_count: 0,
                 warning_count: 0,
+                information_count: 0,
             }
         );
     });
@@ -2181,6 +2184,7 @@ async fn test_diagnostics_from_multiple_language_servers(cx: &mut gpui::TestAppC
             DiagnosticSummary {
                 error_count: 2,
                 warning_count: 0,
+                information_count: 0,
             }
         );
     });

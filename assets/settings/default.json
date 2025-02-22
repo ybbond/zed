@@ -761,6 +761,8 @@
   "diagnostics": {
     // Whether to show warnings or not by default.
     "include_warnings": true,
+    // Whether to show infos or not by default.
+    "include_informations": false,
     // Settings for inline diagnostics
     "inline": {
       // Whether to show diagnostics inline or not

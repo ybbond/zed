@@ -88,6 +88,10 @@ pub struct DiagnosticsSettings {
     #[serde(default = "true_value")]
     pub include_warnings: bool,
 
+    /// Whether or not to include information diagnostics
+    #[serde(default = "true_value")]
+    pub include_informations: bool,
+
     /// Settings for showing inline diagnostics
     #[serde(default)]
     pub inline: InlineDiagnosticsSettings,

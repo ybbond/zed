@@ -44,10 +44,13 @@ use workspace::{
     ItemNavHistory, ToolbarItemLocation, Workspace,
 };
 
-actions!(diagnostics, [Deploy, ToggleWarnings]);
+actions!(diagnostics, [Deploy, ToggleWarnings, ToggleInformations]);
 
 struct IncludeWarnings(bool);
 impl Global for IncludeWarnings {}
+
+struct IncludeInformations(bool);
+impl Global for IncludeInformations {}
 
 pub fn init(cx: &mut App) {
     cx.observe_new(ProjectDiagnosticsEditor::register).detach();
@@ -63,6 +66,7 @@ struct ProjectDiagnosticsEditor {
     path_states: Vec<PathState>,
     paths_to_update: BTreeSet<(ProjectPath, Option<LanguageServerId>)>,
     include_warnings: bool,
+    include_informations: bool,
     context: u32,
     update_excerpts_task: Option<Task<Result<()>>>,
     _subscription: Subscription,
@@ -122,6 +126,7 @@ impl ProjectDiagnosticsEditor {
     fn new_with_context(
         context: u32,
         include_warnings: bool,
+        include_informations: bool,
         project_handle: Entity<Project>,
         workspace: WeakEntity<Workspace>,
         window: &mut Window,
@@ -200,6 +205,11 @@ impl ProjectDiagnosticsEditor {
             this.update_all_excerpts(window, cx);
         })
         .detach();
+        cx.observe_global_in::<IncludeInformations>(window, |this, window, cx| {
+            this.include_informations = cx.global::<IncludeInformations>().0;
+            this.update_all_excerpts(window, cx);
+        })
+        .detach();
 
         let project = project_handle.read(cx);
         let mut this = Self {
@@ -207,6 +217,7 @@ impl ProjectDiagnosticsEditor {
             context,
             summary: project.diagnostic_summary(false, cx),
             include_warnings,
+            include_informations,
             workspace,
             excerpts,
             focus_handle,
@@ -259,6 +270,7 @@ impl ProjectDiagnosticsEditor {
     fn new(
         project_handle: Entity<Project>,
         include_warnings: bool,
+        include_informations: bool,
         workspace: WeakEntity<Workspace>,
         window: &mut Window,
         cx: &mut Context<Self>,
@@ -266,6 +278,7 @@ impl ProjectDiagnosticsEditor {
         Self::new_with_context(
             editor::DEFAULT_MULTIBUFFER_CONTEXT,
             include_warnings,
+            include_informations,
             project_handle,
             workspace,
             window,
@@ -289,10 +302,20 @@ impl ProjectDiagnosticsEditor {
                 None => ProjectSettings::get_global(cx).diagnostics.include_warnings,
             };
 
+            let include_informations = match cx.try_global::<IncludeInformations>() {
+                Some(include_informations) => include_informations.0,
+                None => {
+                    ProjectSettings::get_global(cx)
+                        .diagnostics
+                        .include_informations
+                }
+            };
+
             let diagnostics = cx.new(|cx| {
                 ProjectDiagnosticsEditor::new(
                     workspace.project().clone(),
                     include_warnings,
+                    include_informations,
                     workspace_handle,
                     window,
                     cx,
@@ -305,6 +328,18 @@ impl ProjectDiagnosticsEditor {
     fn toggle_warnings(&mut self, _: &ToggleWarnings, window: &mut Window, cx: &mut Context<Self>) {
         self.include_warnings = !self.include_warnings;
         cx.set_global(IncludeWarnings(self.include_warnings));
+        self.update_all_excerpts(window, cx);
+        cx.notify();
+    }
+
+    fn toggle_informations(
+        &mut self,
+        _: &ToggleInformations,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.include_informations = !self.include_informations;
+        cx.set_global(IncludeInformations(self.include_informations));
         self.update_all_excerpts(window, cx);
         cx.notify();
     }
@@ -382,7 +417,9 @@ impl ProjectDiagnosticsEditor {
         let mut blocks_to_add = Vec::new();
         let mut blocks_to_remove = HashSet::default();
         let mut first_excerpt_id = None;
-        let max_severity = if self.include_warnings {
+        let max_severity = if self.include_informations {
+            DiagnosticSeverity::INFORMATION
+        } else if self.include_warnings {
             DiagnosticSeverity::WARNING
         } else {
             DiagnosticSeverity::ERROR
@@ -757,7 +794,9 @@ impl Item for ProjectDiagnosticsEditor {
         h_flex()
             .gap_1()
             .when(
-                self.summary.error_count == 0 && self.summary.warning_count == 0,
+                self.summary.error_count == 0
+                    && self.summary.warning_count == 0
+                    && self.summary.information_count == 0,
                 |then| {
                     then.child(
                         h_flex()
@@ -785,6 +824,17 @@ impl Item for ProjectDiagnosticsEditor {
                         .child(Icon::new(IconName::Warning).color(Color::Warning))
                         .child(
                             Label::new(self.summary.warning_count.to_string())
+                                .color(params.text_color()),
+                        ),
+                )
+            })
+            .when(self.summary.information_count > 0, |then| {
+                then.child(
+                    h_flex()
+                        .gap_1()
+                        .child(Icon::new(IconName::Info).color(Color::Info))
+                        .child(
+                            Label::new(self.summary.information_count.to_string())
                                 .color(params.text_color()),
                         ),
                 )
@@ -832,6 +882,7 @@ impl Item for ProjectDiagnosticsEditor {
             ProjectDiagnosticsEditor::new(
                 self.project.clone(),
                 self.include_warnings,
+                self.include_informations,
                 self.workspace.clone(),
                 window,
                 cx,
@@ -951,14 +1002,16 @@ fn diagnostic_header_renderer(diagnostic: Diagnostic) -> RenderBlock {
                             svg()
                                 .size(cx.window.text_style().font_size)
                                 .flex_none()
-                                .map(|icon| {
-                                    if diagnostic.severity == DiagnosticSeverity::ERROR {
-                                        icon.path(IconName::XCircle.path())
-                                            .text_color(Color::Error.color(cx))
-                                    } else {
-                                        icon.path(IconName::Warning.path())
-                                            .text_color(Color::Warning.color(cx))
-                                    }
+                                .map(|icon| match diagnostic.severity {
+                                    DiagnosticSeverity::ERROR => icon
+                                        .path(IconName::XCircle.path())
+                                        .text_color(Color::Error.color(cx)),
+                                    DiagnosticSeverity::WARNING => icon
+                                        .path(IconName::Warning.path())
+                                        .text_color(Color::Warning.color(cx)),
+                                    _ => icon
+                                        .path(IconName::Info.path())
+                                        .text_color(Color::Info.color(cx)),
                                 }),
                         )
                     })

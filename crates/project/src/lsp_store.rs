@@ -4997,6 +4997,7 @@ impl LspStore {
         for (_, _, path_summary) in self.diagnostic_summaries(include_ignored, cx) {
             summary.error_count += path_summary.error_count;
             summary.warning_count += path_summary.warning_count;
+            summary.information_count += path_summary.information_count;
         }
         summary
     }
@@ -5529,6 +5530,7 @@ impl LspStore {
                             language_server_id: server_id.0 as u64,
                             error_count: new_summary.error_count as u32,
                             warning_count: new_summary.warning_count as u32,
+                            information_count: new_summary.information_count as u32,
                         }),
                     })
                     .log_err();
@@ -6062,6 +6064,7 @@ impl LspStore {
                 let summary = DiagnosticSummary {
                     error_count: message.error_count as usize,
                     warning_count: message.warning_count as usize,
+                    information_count: message.information_count as usize,
                 };
 
                 if summary.is_empty() {
@@ -6093,6 +6096,7 @@ impl LspStore {
                                 language_server_id: server_id.0 as u64,
                                 error_count: summary.error_count as u32,
                                 warning_count: summary.warning_count as u32,
+                                information_count: summary.information_count as u32,
                             }),
                         })
                         .log_err();
@@ -7284,6 +7288,7 @@ impl LspStore {
                                     language_server_id: server_id.0 as u64,
                                     error_count: 0,
                                     warning_count: 0,
+                                    information_count: 0,
                                 }),
                             })
                             .log_err();
@@ -8392,6 +8397,7 @@ pub struct LanguageServerProgress {
 pub struct DiagnosticSummary {
     pub error_count: usize,
     pub warning_count: usize,
+    pub information_count: usize,
 }
 
 impl DiagnosticSummary {
@@ -8399,6 +8405,7 @@ impl DiagnosticSummary {
         let mut this = Self {
             error_count: 0,
             warning_count: 0,
+            information_count: 0,
         };
 
         for entry in diagnostics {
@@ -8406,6 +8413,7 @@ impl DiagnosticSummary {
                 match entry.diagnostic.severity {
                     DiagnosticSeverity::ERROR => this.error_count += 1,
                     DiagnosticSeverity::WARNING => this.warning_count += 1,
+                    DiagnosticSeverity::INFORMATION => this.information_count += 1,
                     _ => {}
                 }
             }
@@ -8415,7 +8423,7 @@ impl DiagnosticSummary {
     }
 
     pub fn is_empty(&self) -> bool {
-        self.error_count == 0 && self.warning_count == 0
+        self.error_count == 0 && self.warning_count == 0 && self.information_count == 0
     }
 
     pub fn to_proto(
@@ -8428,6 +8436,7 @@ impl DiagnosticSummary {
             language_server_id: language_server_id.0 as u64,
             error_count: self.error_count as u32,
             warning_count: self.warning_count as u32,
+            information_count: self.information_count as u32,
         }
     }
 }

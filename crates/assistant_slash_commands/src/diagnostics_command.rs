@@ -91,7 +91,11 @@ impl SlashCommand for DiagnosticsSlashCommand {
     }
 
     fn label(&self, cx: &App) -> language::CodeLabel {
-        create_label_for_command("diagnostics", &[INCLUDE_WARNINGS_ARGUMENT], cx)
+        create_label_for_command(
+            "diagnostics",
+            &[INCLUDE_WARNINGS_ARGUMENT, INCLUDE_INFORMATIONS_ARGUMENT],
+            cx,
+        )
     }
 
     fn description(&self) -> String {
@@ -197,30 +201,37 @@ impl SlashCommand for DiagnosticsSlashCommand {
 #[derive(Default)]
 struct Options {
     include_warnings: bool,
+    include_informations: bool,
     path_matcher: Option<PathMatcher>,
 }
 
 const INCLUDE_WARNINGS_ARGUMENT: &str = "--include-warnings";
+const INCLUDE_INFORMATIONS_ARGUMENT: &str = "--include-informations";
 
 impl Options {
     fn parse(arguments: &[String]) -> Self {
         let mut include_warnings = false;
+        let mut include_informations = false;
         let mut path_matcher = None;
         for arg in arguments {
-            if arg == INCLUDE_WARNINGS_ARGUMENT {
-                include_warnings = true;
-            } else {
-                path_matcher = PathMatcher::new(&[arg.to_owned()]).log_err();
+            match arg.as_str() {
+                INCLUDE_WARNINGS_ARGUMENT => include_warnings = true,
+                INCLUDE_INFORMATIONS_ARGUMENT => include_informations = true,
+                _ => path_matcher = PathMatcher::new(&[arg.to_owned()]).log_err(),
             }
         }
         Self {
             include_warnings,
+            include_informations,
             path_matcher,
         }
     }
 
-    fn match_candidates_for_args() -> [StringMatchCandidate; 1] {
-        [StringMatchCandidate::new(0, INCLUDE_WARNINGS_ARGUMENT)]
+    fn match_candidates_for_args() -> [StringMatchCandidate; 2] {
+        [
+            StringMatchCandidate::new(0, INCLUDE_WARNINGS_ARGUMENT),
+            StringMatchCandidate::new(1, INCLUDE_INFORMATIONS_ARGUMENT),
+        ]
     }
 }
 
@@ -286,10 +297,18 @@ fn collect_diagnostics(
             }
 
             project_summary.error_count += summary.error_count;
+
+            if !options.include_warnings
+                && !options.include_informations
+                && summary.error_count == 0
+            {
+                continue;
+            }
             if options.include_warnings {
                 project_summary.warning_count += summary.warning_count;
-            } else if summary.error_count == 0 {
-                continue;
+            }
+            if options.include_informations {
+                project_summary.information_count += summary.information_count;
             }
 
             let last_end = output.text.len();
@@ -304,7 +323,7 @@ fn collect_diagnostics(
                 .log_err()
             {
                 let snapshot = cx.read_entity(&buffer, |buffer, _| buffer.snapshot())?;
-                collect_buffer_diagnostics(&mut output, &snapshot, options.include_warnings);
+                collect_buffer_diagnostics(&mut output, &snapshot, &options);
             }
 
             if !glob_is_exact_file_match {
@@ -328,7 +347,10 @@ fn collect_diagnostics(
             write!(label, " ({})", source).unwrap();
         }
 
-        if project_summary.error_count > 0 || project_summary.warning_count > 0 {
+        if project_summary.error_count > 0
+            || project_summary.warning_count > 0
+            || project_summary.information_count > 0
+        {
             label.push(':');
 
             if project_summary.error_count > 0 {
@@ -340,6 +362,13 @@ fn collect_diagnostics(
 
             if project_summary.warning_count > 0 {
                 write!(label, " {} warnings", project_summary.warning_count).unwrap();
+                if project_summary.information_count > 0 {
+                    label.push_str(",");
+                }
+            }
+
+            if project_summary.information_count > 0 {
+                write!(label, " {} informations", project_summary.information_count).unwrap();
             }
         }
 
@@ -357,14 +386,14 @@ fn collect_diagnostics(
     })
 }
 
-pub fn collect_buffer_diagnostics(
+fn collect_buffer_diagnostics(
     output: &mut SlashCommandOutput,
     snapshot: &BufferSnapshot,
-    include_warnings: bool,
+    options: &Options,
 ) {
     for (_, group) in snapshot.diagnostic_groups(None) {
         let entry = &group.entries[group.primary_ix];
-        collect_diagnostic(output, entry, &snapshot, include_warnings)
+        collect_diagnostic(output, entry, &snapshot, options)
     }
 }
 
@@ -372,14 +401,20 @@ fn collect_diagnostic(
     output: &mut SlashCommandOutput,
     entry: &DiagnosticEntry<Anchor>,
     snapshot: &BufferSnapshot,
-    include_warnings: bool,
+    options: &Options,
 ) {
     const EXCERPT_EXPANSION_SIZE: u32 = 2;
     const MAX_MESSAGE_LENGTH: usize = 2000;
 
     let (ty, icon) = match entry.diagnostic.severity {
+        DiagnosticSeverity::INFORMATION => {
+            if !options.include_informations {
+                return;
+            }
+            ("info", IconName::Info)
+        }
         DiagnosticSeverity::WARNING => {
-            if !include_warnings {
+            if !options.include_warnings {
                 return;
             }
             ("warning", IconName::Warning)

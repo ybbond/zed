@@ -1214,6 +1214,7 @@ To interpret all `.c` files as C++, files called `MyLockFile` as TOML and files 
 {
   "diagnostics": {
     "include_warnings": true,
+    "include_informations": false,
     "inline": {
       "enabled": false
     }
